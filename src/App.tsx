@@ -7,9 +7,10 @@ import { StatsCard } from './components/StatsCard';
 import { RecordForm } from './components/RecordForm';
 import { RecordsTable } from './components/RecordsTable';
 import { PDFPreviewModal } from './components/PDFPreviewModal';
-import { getProjectData, saveProjectData, getCounter, saveCounter } from './utils/storage';
 import { generatePDFPreview, downloadPDF } from './utils/pdf-generator';
-import { Record, ProjectData, Stats } from './types';
+import { getRecords } from './utils/getRecords';
+import { supabase } from './utils/supabaseClient';
+import { Record, Stats } from './types';
 import { FileText, FileDown, Search, Filter } from 'lucide-react';
 import { Label } from './components/ui/label';
 
@@ -17,55 +18,79 @@ const PROJECTS = ['Emek Projesi', 'Bilkent Projesi', 'Çankaya Projesi'];
 
 export default function App() {
   const [selectedProject, setSelectedProject] = useState<string>(PROJECTS[0]);
-  const [projectData, setProjectData] = useState<ProjectData>({});
-  const [recordCounter, setRecordCounter] = useState<number>(1);
+  const [records, setRecords] = useState<Record[]>([]);
   const [filterStatus, setFilterStatus] = useState<string>('Tümü');
   const [searchText, setSearchText] = useState<string>('');
   const [pdfPreviewData, setPdfPreviewData] = useState<string>('');
   const [showPdfPreview, setShowPdfPreview] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(true);
 
-  // LocalStorage'dan veri yükle
+  // 📥 Supabase'ten kayıtları çek
+  const fetchRecords = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('records')
+        .select('*')
+        .eq('project_name', selectedProject)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setRecords(data || []);
+    } catch (err) {
+      console.error('❌ Kayıtlar alınamadı:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 🎯 Proje değiştiğinde kayıtları çek
   useEffect(() => {
-    const data = getProjectData();
-    const counter = getCounter();
-    setProjectData(data);
-    setRecordCounter(counter);
-  }, []);
+    fetchRecords();
+  }, [selectedProject]);
 
-  // Veri değiştiğinde localStorage'a kaydet
-  useEffect(() => {
-    saveProjectData(projectData);
-  }, [projectData]);
+  // 🧾 Yeni kayıt eklendiğinde tabloyu yenile
+  const handleAddRecord = async () => {
+    await fetchRecords();
+  };
 
-  useEffect(() => {
-    saveCounter(recordCounter);
-  }, [recordCounter]);
+  // 🗑️ Kayıt silme
+  const handleDeleteRecord = async (id: number) => {
+    if (confirm('Bu kaydı silmek istediğinizden emin misiniz?')) {
+      try {
+        const { error } = await supabase.from('records').delete().eq('id', id);
+        if (error) throw error;
+        setRecords((prev) => prev.filter((r) => r.id !== id));
+        alert('✅ Kayıt silindi.');
+      } catch (err) {
+        console.error('❌ Silme hatası:', err);
+        alert('❌ Kayıt silinirken hata oluştu.');
+      }
+    }
+  };
 
-  // Seçili projenin kayıtları
-  const currentRecords = projectData[selectedProject] || [];
-
-  // Filtrelenmiş kayıtlar
-  const filteredRecords = currentRecords.filter((record) => {
+  // 🔍 Filtreleme
+  const filteredRecords = records.filter((record) => {
     const statusMatch = filterStatus === 'Tümü' || record.durum === filterStatus;
-    const textMatch = 
+    const textMatch =
       searchText === '' ||
-      record.lokasyon.toLowerCase().includes(searchText.toLowerCase()) ||
-      record.atanan.toLowerCase().includes(searchText.toLowerCase()) ||
-      record.aciklama.toLowerCase().includes(searchText.toLowerCase());
+      record.lokasyon?.toLowerCase().includes(searchText.toLowerCase()) ||
+      record.atanan?.toLowerCase().includes(searchText.toLowerCase()) ||
+      record.aciklama?.toLowerCase().includes(searchText.toLowerCase());
     return statusMatch && textMatch;
   });
 
-  // İstatistikler
+  // 📊 İstatistikler
   const calculateStats = (): Stats => {
     const stats = {
       acik: 0,
       hatali: 0,
       kapali: 0,
       tamamlandi: 0,
-      toplam: currentRecords.length
+      toplam: filteredRecords.length
     };
 
-    currentRecords.forEach((record) => {
+    filteredRecords.forEach((record) => {
       switch (record.durum) {
         case 'Açık':
           stats.acik++;
@@ -88,47 +113,21 @@ export default function App() {
   const stats = calculateStats();
   const progress = stats.toplam > 0 ? (stats.tamamlandi / stats.toplam) * 100 : 0;
 
-  // Kayıt ekle
-  const handleAddRecord = (record: Omit<Record, 'id' | 'tarih'>) => {
-    const newRecord: Record = {
-      ...record,
-      id: recordCounter,
-      tarih: new Date().toLocaleDateString('tr-TR')
-    };
-
-    setProjectData((prev) => ({
-      ...prev,
-      [selectedProject]: [...(prev[selectedProject] || []), newRecord]
-    }));
-
-    setRecordCounter((prev) => prev + 1);
-  };
-
-  // Kayıt sil
-  const handleDeleteRecord = (id: number) => {
-    if (confirm('Bu kaydı silmek istediğinizden emin misiniz?')) {
-      setProjectData((prev) => ({
-        ...prev,
-        [selectedProject]: prev[selectedProject].filter((record) => record.id !== id)
-      }));
-    }
-  };
-
-  // PDF Önizleme
+  // 🧾 PDF Önizleme
   const handlePDFPreview = () => {
     const pdfData = generatePDFPreview(selectedProject, filteredRecords, stats);
     setPdfPreviewData(pdfData);
     setShowPdfPreview(true);
   };
 
-  // PDF İndir
+  // 🧾 PDF İndir
   const handlePDFDownload = () => {
     if (pdfPreviewData) {
       downloadPDF(pdfPreviewData, selectedProject);
     }
   };
 
-  // CSV Export
+  // 📤 CSV Dışa Aktar
   const handleCSVExport = () => {
     const headers = ['ID', 'Lokasyon', 'Atanan', 'Durum', 'Açıklama', 'Yorum', 'QR Kod', 'Tarih'];
     const csvData = [
@@ -229,9 +228,7 @@ export default function App() {
       <div className="bg-white shadow-sm rounded-lg p-6 mb-6">
         <h2 className="text-xl mb-4">Proje İlerlemesi</h2>
         <Progress value={progress} className="h-4" />
-        <p className="text-center mt-2 text-gray-600">
-          %{progress.toFixed(1)} Tamamlandı
-        </p>
+        <p className="text-center mt-2 text-gray-600">%{progress.toFixed(1)} Tamamlandı</p>
       </div>
 
       {/* Export Butonları */}
@@ -252,7 +249,11 @@ export default function App() {
       </div>
 
       {/* Tablo */}
-      <RecordsTable records={filteredRecords} onDelete={handleDeleteRecord} />
+      {loading ? (
+        <p className="text-center text-gray-500">Veriler yükleniyor...</p>
+      ) : (
+        <RecordsTable records={filteredRecords} onDelete={handleDeleteRecord} />
+      )}
 
       {/* PDF Önizleme Modal */}
       <PDFPreviewModal
