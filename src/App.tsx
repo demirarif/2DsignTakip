@@ -13,6 +13,7 @@ import { supabase } from './utils/supabaseClient';
 import { Record, Stats } from './types';
 import { FileText, FileDown, Search, Filter } from 'lucide-react';
 import { Label } from './components/ui/label';
+import { subscribeToRecords } from './utils/realtimeListener'; // ✅ YENİ EKLENDİ
 
 const PROJECTS = ['Emek Projesi', 'Bilkent Projesi', 'Çankaya Projesi'];
 
@@ -48,6 +49,15 @@ export default function App() {
   useEffect(() => {
     fetchRecords();
   }, [selectedProject]);
+
+  // 🔁 Supabase Realtime dinleyici
+  useEffect(() => {
+    const unsubscribe = subscribeToRecords(() => {
+      console.log('🔁 Değişiklik algılandı, tablo yenileniyor...');
+      fetchRecords();
+    });
+    return () => unsubscribe();
+  }, [selectedProject]); // ✅ YENİ EKLENDİ
 
   // 🧾 Yeni kayıt eklendiğinde tabloyu yenile
   const handleAddRecord = async () => {
@@ -87,7 +97,7 @@ export default function App() {
       hatali: 0,
       kapali: 0,
       tamamlandi: 0,
-      toplam: filteredRecords.length
+      toplam: filteredRecords.length,
     };
 
     filteredRecords.forEach((record) => {
@@ -141,16 +151,19 @@ export default function App() {
           `"${record.aciklama}"`,
           `"${record.yorum}"`,
           record.qrKod,
-          record.tarih
+          record.tarih,
         ].join(',')
-      )
+      ),
     ].join('\n');
 
     const blob = new Blob(['\ufeff' + csvData], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
-    link.setAttribute('download', `${selectedProject}_${new Date().toLocaleDateString('tr-TR')}.csv`);
+    link.setAttribute(
+      'download',
+      `${selectedProject}_${new Date().toLocaleDateString('tr-TR')}.csv`
+    );
     link.click();
   };
 
