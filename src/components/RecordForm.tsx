@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -7,13 +7,16 @@ import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Record } from '../types';
 import { Upload } from 'lucide-react';
-import { saveRecord } from '../utils/saveRecord'; // 🔵 Supabase entegrasyonu
+import { saveRecord } from '../utils/saveRecord';
+import { supabase } from '../utils/supabaseClient';
 
 interface RecordFormProps {
   onSubmit: (record: Omit<Record, 'id' | 'tarih'>) => void;
+  editData?: Record | null; // ✅ yeni
+  onEditDone?: () => void; // ✅ edit sonrası reset
 }
 
-export const RecordForm: React.FC<RecordFormProps> = ({ onSubmit }) => {
+export const RecordForm: React.FC<RecordFormProps> = ({ onSubmit, editData, onEditDone }) => {
   const [lokasyon, setLokasyon] = useState('');
   const [atanan, setAtanan] = useState('');
   const [durum, setDurum] = useState<'Açık' | 'Hatalı' | 'Kapalı' | 'Tamamlandı'>('Açık');
@@ -23,17 +26,29 @@ export const RecordForm: React.FC<RecordFormProps> = ({ onSubmit }) => {
   const [photo, setPhoto] = useState('');
   const [dosya, setDosya] = useState('');
   const [photoPreview, setPhotoPreview] = useState('');
-  
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 🔵 Supabase'e gönderilecek gerçek dosyayı da tutacağız
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  // ✅ eğer düzenleme modundaysa formu doldur
+  useEffect(() => {
+    if (editData) {
+      setLokasyon(editData.lokasyon || '');
+      setAtanan(editData.atanan || '');
+      setDurum(editData.durum as any || 'Açık');
+      setAciklama(editData.aciklama || '');
+      setYorum(editData.yorum || '');
+      setQrKod(editData.qrKod || '');
+      setPhoto(editData.photo || '');
+      setDosya(editData.dosya || '');
+      setPhotoPreview(editData.photo || '');
+    }
+  }, [editData]);
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setPhotoFile(file); // 🔵 Dosyayı upload için kaydet
+      setPhotoFile(file);
       const reader = new FileReader();
       reader.onload = (event) => {
         const img = new Image();
@@ -61,7 +76,7 @@ export const RecordForm: React.FC<RecordFormProps> = ({ onSubmit }) => {
             canvas.width = width;
             canvas.height = height;
             ctx?.drawImage(img, 0, 0, width, height);
-            
+
             const base64 = canvas.toDataURL('image/jpeg', 0.8);
             setPhoto(base64);
             setPhotoPreview(base64);
@@ -75,38 +90,58 @@ export const RecordForm: React.FC<RecordFormProps> = ({ onSubmit }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!lokasyon || !atanan) {
       alert('Lütfen zorunlu alanları doldurun!');
       return;
     }
 
-    // 🔵 Supabase'e kaydet
     try {
-      await saveRecord(
-        lokasyon,
-        `${atanan} - ${durum}`,
-        photoFile || undefined,
-        undefined // PDF ileride eklenecek
-      );
-      console.log('Kayıt başarılı!');
+      if (editData) {
+        // ✏️ Güncelleme modu
+        const { error } = await supabase
+          .from('records')
+          .update({
+            lokasyon,
+            atanan,
+            durum,
+            aciklama,
+            yorum,
+            qrKod,
+            photo,
+            dosya,
+          })
+          .eq('id', editData.id);
+
+        if (error) throw error;
+        alert('✅ Kayıt güncellendi.');
+        onEditDone?.();
+      } else {
+        // ➕ Yeni kayıt ekleme
+        await saveRecord(
+          lokasyon,
+          `${atanan} - ${durum}`,
+          photoFile || undefined,
+          undefined
+        );
+        console.log('Kayıt başarılı!');
+        onSubmit({
+          lokasyon,
+          atanan,
+          durum,
+          aciklama,
+          yorum,
+          qrKod,
+          photo,
+          dosya,
+        });
+      }
     } catch (error) {
-      console.error('Kayıt başarısız:', error);
+      console.error('❌ Kayıt hatası:', error);
+      alert('❌ Kayıt sırasında hata oluştu.');
     }
 
-    // 🔵 Mevcut sistemdeki parent callback çalışsın
-    onSubmit({
-      lokasyon,
-      atanan,
-      durum,
-      aciklama,
-      yorum,
-      qrKod,
-      photo,
-      dosya
-    });
-
-    // Form temizle
+    // Formu temizle
     setLokasyon('');
     setAtanan('');
     setDurum('Açık');
@@ -117,15 +152,15 @@ export const RecordForm: React.FC<RecordFormProps> = ({ onSubmit }) => {
     setDosya('');
     setPhotoPreview('');
     setPhotoFile(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Yeni Kayıt Ekle</CardTitle>
+        <CardTitle>
+          {editData ? 'Kaydı Düzenle' : 'Yeni Kayıt Ekle'}
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -139,7 +174,7 @@ export const RecordForm: React.FC<RecordFormProps> = ({ onSubmit }) => {
                 required
               />
             </div>
-            
+
             <div>
               <Label htmlFor="atanan">Atanan Kişi *</Label>
               <Input
@@ -149,10 +184,10 @@ export const RecordForm: React.FC<RecordFormProps> = ({ onSubmit }) => {
                 required
               />
             </div>
-            
+
             <div>
               <Label htmlFor="durum">Durum</Label>
-              <Select value={durum} onValueChange={(value: any) => setDurum(value)}>
+              <Select value={durum} onValueChange={(v: any) => setDurum(v)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -164,7 +199,7 @@ export const RecordForm: React.FC<RecordFormProps> = ({ onSubmit }) => {
                 </SelectContent>
               </Select>
             </div>
-            
+
             <div>
               <Label htmlFor="qrKod">QR Kod</Label>
               <Input
@@ -174,7 +209,7 @@ export const RecordForm: React.FC<RecordFormProps> = ({ onSubmit }) => {
               />
             </div>
           </div>
-          
+
           <div>
             <Label htmlFor="aciklama">Açıklama</Label>
             <Textarea
@@ -184,7 +219,7 @@ export const RecordForm: React.FC<RecordFormProps> = ({ onSubmit }) => {
               rows={3}
             />
           </div>
-          
+
           <div>
             <Label htmlFor="yorum">Yorum</Label>
             <Textarea
@@ -194,7 +229,7 @@ export const RecordForm: React.FC<RecordFormProps> = ({ onSubmit }) => {
               rows={3}
             />
           </div>
-          
+
           <div>
             <Label htmlFor="photo">Fotoğraf Yükle</Label>
             <div className="flex items-center gap-4">
@@ -206,7 +241,12 @@ export const RecordForm: React.FC<RecordFormProps> = ({ onSubmit }) => {
                 ref={fileInputRef}
                 className="flex-1"
               />
-              <Button type="button" variant="outline" size="icon" onClick={() => fileInputRef.current?.click()}>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => fileInputRef.current?.click()}
+              >
                 <Upload className="h-4 w-4" />
               </Button>
             </div>
@@ -214,11 +254,15 @@ export const RecordForm: React.FC<RecordFormProps> = ({ onSubmit }) => {
             {photoPreview && (
               <div className="mt-4">
                 <p className="text-sm mb-2">Önizleme:</p>
-                <img src={photoPreview} alt="Önizleme" className="max-w-xs border rounded" />
+                <img
+                  src={photoPreview}
+                  alt="Önizleme"
+                  className="max-w-xs border rounded"
+                />
               </div>
             )}
           </div>
-          
+
           <div>
             <Label htmlFor="dosya">Dosya</Label>
             <Input
@@ -228,8 +272,10 @@ export const RecordForm: React.FC<RecordFormProps> = ({ onSubmit }) => {
               placeholder="Dosya yolu veya adı"
             />
           </div>
-          
-          <Button type="submit" className="w-full">Kayıt Ekle</Button>
+
+          <Button type="submit" className="w-full">
+            {editData ? 'Kaydı Güncelle' : 'Kayıt Ekle'}
+          </Button>
         </form>
       </CardContent>
     </Card>
