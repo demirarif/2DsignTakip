@@ -6,7 +6,8 @@ import { Textarea } from './ui/textarea';
 import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Record } from '../types';
-import { Upload, Image as ImageIcon } from 'lucide-react';
+import { Upload } from 'lucide-react';
+import { saveRecord } from '../utils/saveRecord'; // 🔵 Supabase entegrasyonu
 
 interface RecordFormProps {
   onSubmit: (record: Omit<Record, 'id' | 'tarih'>) => void;
@@ -26,9 +27,13 @@ export const RecordForm: React.FC<RecordFormProps> = ({ onSubmit }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // 🔵 Supabase'e gönderilecek gerçek dosyayı da tutacağız
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setPhotoFile(file); // 🔵 Dosyayı upload için kaydet
       const reader = new FileReader();
       reader.onload = (event) => {
         const img = new Image();
@@ -68,7 +73,7 @@ export const RecordForm: React.FC<RecordFormProps> = ({ onSubmit }) => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!lokasyon || !atanan) {
@@ -76,6 +81,20 @@ export const RecordForm: React.FC<RecordFormProps> = ({ onSubmit }) => {
       return;
     }
 
+    // 🔵 Supabase'e kaydet
+    try {
+      await saveRecord(
+        lokasyon,
+        `${atanan} - ${durum}`,
+        photoFile || undefined,
+        undefined // PDF ileride eklenecek
+      );
+      console.log('✅ Supabase kaydı başarılı!');
+    } catch (error) {
+      console.error('❌ Supabase kaydı başarısız:', error);
+    }
+
+    // 🔵 Mevcut sistemdeki parent callback çalışsın
     onSubmit({
       lokasyon,
       atanan,
@@ -97,6 +116,7 @@ export const RecordForm: React.FC<RecordFormProps> = ({ onSubmit }) => {
     setPhoto('');
     setDosya('');
     setPhotoPreview('');
+    setPhotoFile(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
