@@ -10,7 +10,7 @@ export async function getRecords() {
     if (error) throw error
     return data || []
   } catch (err) {
-    console.error('❌ Veriler çekilemedi:', err)
+    console.error('Veriler çekilemedi:', err)
     return []
   }
 }
