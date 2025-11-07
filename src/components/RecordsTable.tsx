@@ -9,23 +9,29 @@ import { Trash2, Edit } from 'lucide-react';
 interface RecordsTableProps {
   records: Record[];
   onDelete: (id: number) => void;
-  onEdit: (record: Record) => void; // ✅ eklendi
+  onEdit: (record: Record) => void;
 }
 
 export const RecordsTable: React.FC<RecordsTableProps> = ({ records, onDelete, onEdit }) => {
   const getStatusColor = (durum: string) => {
     switch (durum) {
       case 'Açık':
-        return 'bg-blue-500';
+        return 'bg-blue-500 text-white';
       case 'Hatalı':
-        return 'bg-red-500';
+        return 'bg-red-500 text-white';
       case 'Kapalı':
-        return 'bg-gray-500';
+        return 'bg-gray-500 text-white';
       case 'Tamamlandı':
-        return 'bg-green-500';
+        return 'bg-green-500 text-white';
       default:
-        return 'bg-gray-500';
+        return 'bg-gray-500 text-white';
     }
+  };
+
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return '—';
+    const date = new Date(dateStr);
+    return date.toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' });
   };
 
   return (
@@ -47,13 +53,14 @@ export const RecordsTable: React.FC<RecordsTableProps> = ({ records, onDelete, o
                 <TableHead>QR Kod</TableHead>
                 <TableHead>Tarih</TableHead>
                 <TableHead>Fotoğraf</TableHead>
-                <TableHead>İşlem</TableHead>
+                <TableHead className="text-center">İşlem</TableHead>
               </TableRow>
             </TableHeader>
+
             <TableBody>
               {records.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center text-gray-500">
+                  <TableCell colSpan={10} className="text-center text-gray-500 py-6">
                     Henüz kayıt eklenmemiş
                   </TableCell>
                 </TableRow>
@@ -63,22 +70,31 @@ export const RecordsTable: React.FC<RecordsTableProps> = ({ records, onDelete, o
                     <TableCell>{record.id}</TableCell>
                     <TableCell>{record.lokasyon}</TableCell>
                     <TableCell>{record.atanan}</TableCell>
+
                     <TableCell>
                       <Badge className={getStatusColor(record.durum)}>
                         {record.durum}
                       </Badge>
                     </TableCell>
-                    <TableCell className="max-w-xs truncate">{record.aciklama}</TableCell>
-                    <TableCell className="max-w-xs truncate">{record.yorum}</TableCell>
-                    <TableCell>{record.qrKod}</TableCell>
-                    <TableCell>{record.tarih}</TableCell>
+
+                    <TableCell className="max-w-xs truncate">{record.aciklama || '—'}</TableCell>
+                    <TableCell className="max-w-xs truncate">{record.yorum || '—'}</TableCell>
+                    <TableCell>{record.qrKod || '—'}</TableCell>
+                    <TableCell>{formatDate(record.tarih)}</TableCell>
+
                     <TableCell>
-                      {record.photo && (
-                        <img src={record.photo} alt="Kayıt" className="w-16 h-16 object-cover rounded" />
+                      {record.photo ? (
+                        <img
+                          src={record.photo}
+                          alt="Kayıt"
+                          className="w-16 h-16 object-cover rounded shadow-sm border"
+                        />
+                      ) : (
+                        <span className="text-gray-400">—</span>
                       )}
                     </TableCell>
-                    <TableCell className="flex gap-2">
-                      {/* ✅ yeni: Düzenle */}
+
+                    <TableCell className="flex gap-2 justify-center">
                       <Button
                         variant="secondary"
                         size="icon"
@@ -87,7 +103,6 @@ export const RecordsTable: React.FC<RecordsTableProps> = ({ records, onDelete, o
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
-                      {/* mevcut: Sil */}
                       <Button
                         variant="destructive"
                         size="icon"
