@@ -8,12 +8,11 @@ import { RecordForm } from './components/RecordForm';
 import { RecordsTable } from './components/RecordsTable';
 import { PDFPreviewModal } from './components/PDFPreviewModal';
 import { generatePDFPreview, downloadPDF } from './utils/pdf-generator';
-import { getRecords } from './utils/getRecords';
 import { supabase } from './utils/supabaseClient';
 import { Record, Stats } from './types';
-import { FileText, FileDown, Search, Filter } from 'lucide-react';
+import { FileText, FileDown, Search, Filter, Edit2 } from 'lucide-react';
 import { Label } from './components/ui/label';
-import { subscribeToRecords } from './utils/realtimeListener'; // ✅ YENİ EKLENDİ
+import { subscribeToRecords } from './utils/realtimeListener';
 
 const PROJECTS = ['Emek Projesi', 'Bilkent Projesi', 'Çankaya Projesi'];
 
@@ -25,6 +24,9 @@ export default function App() {
   const [pdfPreviewData, setPdfPreviewData] = useState<string>('');
   const [showPdfPreview, setShowPdfPreview] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
+
+  // ✏️ yeni state
+  const [editData, setEditData] = useState<Record | null>(null);
 
   // 📥 Supabase'ten kayıtları çek
   const fetchRecords = async () => {
@@ -45,21 +47,19 @@ export default function App() {
     }
   };
 
-  // 🎯 Proje değiştiğinde kayıtları çek
   useEffect(() => {
     fetchRecords();
   }, [selectedProject]);
 
-  // 🔁 Supabase Realtime dinleyici
+  // 🔁 realtime dinleyici
   useEffect(() => {
     const unsubscribe = subscribeToRecords(() => {
       console.log('🔁 Değişiklik algılandı, tablo yenileniyor...');
       fetchRecords();
     });
     return () => unsubscribe();
-  }, [selectedProject]); // ✅ YENİ EKLENDİ
+  }, [selectedProject]);
 
-  // 🧾 Yeni kayıt eklendiğinde tabloyu yenile
   const handleAddRecord = async () => {
     await fetchRecords();
   };
@@ -79,7 +79,18 @@ export default function App() {
     }
   };
 
-  // 🔍 Filtreleme
+  // 🖋️ düzenleme
+  const handleEditRecord = (record: Record) => {
+    setEditData(record);
+    window.scrollTo({ top: 0, behavior: 'smooth' }); // formu yukarı getir
+  };
+
+  const handleEditDone = async () => {
+    setEditData(null);
+    await fetchRecords();
+  };
+
+  // 🔍 filtreleme
   const filteredRecords = records.filter((record) => {
     const statusMatch = filterStatus === 'Tümü' || record.durum === filterStatus;
     const textMatch =
@@ -90,7 +101,7 @@ export default function App() {
     return statusMatch && textMatch;
   });
 
-  // 📊 İstatistikler
+  // 📊 istatistikler
   const calculateStats = (): Stats => {
     const stats = {
       acik: 0,
@@ -116,28 +127,21 @@ export default function App() {
           break;
       }
     });
-
     return stats;
   };
 
   const stats = calculateStats();
   const progress = stats.toplam > 0 ? (stats.tamamlandi / stats.toplam) * 100 : 0;
 
-  // 🧾 PDF Önizleme
+  // 📄 PDF & CSV
   const handlePDFPreview = () => {
     const pdfData = generatePDFPreview(selectedProject, filteredRecords, stats);
     setPdfPreviewData(pdfData);
     setShowPdfPreview(true);
   };
-
-  // 🧾 PDF İndir
   const handlePDFDownload = () => {
-    if (pdfPreviewData) {
-      downloadPDF(pdfPreviewData, selectedProject);
-    }
+    if (pdfPreviewData) downloadPDF(pdfPreviewData, selectedProject);
   };
-
-  // 📤 CSV Dışa Aktar
   const handleCSVExport = () => {
     const headers = ['ID', 'Lokasyon', 'Atanan', 'Durum', 'Açıklama', 'Yorum', 'QR Kod', 'Tarih'];
     const csvData = [
@@ -158,12 +162,8 @@ export default function App() {
 
     const blob = new Blob(['\ufeff' + csvData], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute(
-      'download',
-      `${selectedProject}_${new Date().toLocaleDateString('tr-TR')}.csv`
-    );
+    link.href = URL.createObjectURL(blob);
+    link.download = `${selectedProject}_${new Date().toLocaleDateString('tr-TR')}.csv`;
     link.click();
   };
 
@@ -258,17 +258,21 @@ export default function App() {
 
       {/* Form */}
       <div className="mb-6">
-        <RecordForm onSubmit={handleAddRecord} />
+        <RecordForm onSubmit={handleAddRecord} editData={editData} onEditDone={handleEditDone} />
       </div>
 
       {/* Tablo */}
       {loading ? (
         <p className="text-center text-gray-500">Veriler yükleniyor...</p>
       ) : (
-        <RecordsTable records={filteredRecords} onDelete={handleDeleteRecord} />
+        <RecordsTable
+          records={filteredRecords}
+          onDelete={handleDeleteRecord}
+          onEdit={handleEditRecord} // ✅ yeni
+        />
       )}
 
-      {/* PDF Önizleme Modal */}
+      {/* PDF Modal */}
       <PDFPreviewModal
         isOpen={showPdfPreview}
         onClose={() => setShowPdfPreview(false)}
