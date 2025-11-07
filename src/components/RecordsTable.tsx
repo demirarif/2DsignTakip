@@ -4,14 +4,15 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Record } from '../types';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
-import { Trash2, Image as ImageIcon } from 'lucide-react';
+import { Trash2, Edit } from 'lucide-react';
 
 interface RecordsTableProps {
   records: Record[];
   onDelete: (id: number) => void;
+  onEdit: (record: Record) => void; // ✅ eklendi
 }
 
-export const RecordsTable: React.FC<RecordsTableProps> = ({ records, onDelete }) => {
+export const RecordsTable: React.FC<RecordsTableProps> = ({ records, onDelete, onEdit }) => {
   const getStatusColor = (durum: string) => {
     switch (durum) {
       case 'Açık':
@@ -76,11 +77,22 @@ export const RecordsTable: React.FC<RecordsTableProps> = ({ records, onDelete })
                         <img src={record.photo} alt="Kayıt" className="w-16 h-16 object-cover rounded" />
                       )}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="flex gap-2">
+                      {/* ✅ yeni: Düzenle */}
+                      <Button
+                        variant="secondary"
+                        size="icon"
+                        onClick={() => onEdit(record)}
+                        title="Düzenle"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      {/* mevcut: Sil */}
                       <Button
                         variant="destructive"
                         size="icon"
                         onClick={() => onDelete(record.id)}
+                        title="Sil"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
