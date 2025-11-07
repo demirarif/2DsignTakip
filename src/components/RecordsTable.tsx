@@ -10,9 +10,15 @@ interface RecordsTableProps {
   records: Record[];
   onDelete: (id: number) => void;
   onEdit: (record: Record) => void;
+  onPhotoClick?: (url: string) => void; // ✅ yeni eklendi
 }
 
-export const RecordsTable: React.FC<RecordsTableProps> = ({ records, onDelete, onEdit }) => {
+export const RecordsTable: React.FC<RecordsTableProps> = ({
+  records,
+  onDelete,
+  onEdit,
+  onPhotoClick,
+}) => {
   const getStatusColor = (durum: string) => {
     switch (durum) {
       case 'Açık':
@@ -87,7 +93,9 @@ export const RecordsTable: React.FC<RecordsTableProps> = ({ records, onDelete, o
                         <img
                           src={record.photo}
                           alt="Kayıt"
-                          className="w-16 h-16 object-cover rounded shadow-sm border"
+                          className="w-16 h-16 object-cover rounded shadow-sm border cursor-pointer hover:scale-105 transition-transform"
+                          title="Büyütmek için tıkla"
+                          onClick={() => onPhotoClick && onPhotoClick(record.photo)} // ✅ tıklanabilir hale getirildi
                         />
                       ) : (
                         <span className="text-gray-400">—</span>
