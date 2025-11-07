@@ -89,9 +89,9 @@ export const RecordForm: React.FC<RecordFormProps> = ({ onSubmit }) => {
         photoFile || undefined,
         undefined // PDF ileride eklenecek
       );
-      console.log('✅ Supabase kaydı başarılı!');
+      console.log('Kayıt başarılı!');
     } catch (error) {
-      console.error('❌ Supabase kaydı başarısız:', error);
+      console.error('Kayıt başarısız:', error);
     }
 
     // 🔵 Mevcut sistemdeki parent callback çalışsın
