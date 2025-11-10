@@ -1,122 +1,171 @@
 import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import QRCode from 'qrcode';
 import { Record, Stats } from '../types';
+import logo from '../assets/2Dsign.png'; // ✅ senin logon
+const LOGO_BASE64 = logo;
 
-// Türkçe karakter desteği için custom font ekle
-const addTurkishFont = (doc: jsPDF) => {
-  // jsPDF'e Türkçe karakter desteği eklemek için
-  // Varsayılan font'u kullanacağız ve karakterleri encode edeceğiz
+// Türkçe karakter desteği
+const sanitizeText = (text?: string) => {
+  if (!text) return '';
+  return text
+    .replace(/ğ/g, 'g')
+    .replace(/Ğ/g, 'G')
+    .replace(/ş/g, 's')
+    .replace(/Ş/g, 'S')
+    .replace(/ı/g, 'i')
+    .replace(/İ/g, 'I')
+    .replace(/ö/g, 'o')
+    .replace(/Ö/g, 'O')
+    .replace(/ü/g, 'u')
+    .replace(/Ü/g, 'U')
+    .replace(/ç/g, 'c')
+    .replace(/Ç/g, 'C');
 };
 
-export const generatePDFPreview = (
+// Ana PDF oluşturucu
+export const generatePDFPreview = async (
   projectName: string,
   records: Record[],
   stats: Stats
-): string => {
+): Promise<string> => {
   const doc = new jsPDF({
     orientation: 'landscape',
     unit: 'mm',
-    format: 'a4'
+    format: 'a4',
   });
+
+  // Logo
+  doc.addImage(LOGO_BASE64, 'PNG', 10, 8, 40, 18);
 
   // Başlık
   doc.setFontSize(20);
-  doc.text(`${projectName} - Proje Raporu`, 15, 20);
+  doc.text(sanitizeText(`${projectName} - Proje Raporu`), 60, 20);
 
   // Tarih
   doc.setFontSize(12);
   const today = new Date().toLocaleDateString('tr-TR');
-  doc.text(`Rapor Tarihi: ${today}`, 15, 30);
-
-  // İstatistikler
-  doc.setFontSize(11);
-  doc.text(`Toplam Kayit: ${stats.toplam}`, 15, 40);
-  doc.text(`Acik: ${stats.acik}`, 60, 40);
-  doc.text(`Hatali: ${stats.hatali}`, 95, 40);
-  doc.text(`Kapali: ${stats.kapali}`, 130, 40);
-  doc.text(`Tamamlandi: ${stats.tamamlandi}`, 165, 40);
+  doc.text(`Rapor Tarihi: ${today}`, 60, 28);
 
   // Çizgi
-  doc.setLineWidth(0.5);
-  doc.line(15, 45, 282, 45);
+  doc.setDrawColor(50, 50, 50);
+  doc.line(10, 32, 285, 32);
 
-  let yPos = 55;
-  const pageHeight = 210; // A4 landscape height
-  const marginBottom = 20;
+  // İstatistik kutuları
+  const statsY = 38;
+  const boxWidth = 50;
+  const boxHeight = 18;
+  const boxGap = 10;
+  const colors = ['#3B82F6', '#EF4444', '#6B7280', '#10B981', '#8B5CF6'];
+  const labels = ['Açık', 'Hatalı', 'Kapalı', 'Tamamlandı', 'Toplam'];
+  const values = [
+    stats.acik,
+    stats.hatali,
+    stats.kapali,
+    stats.tamamlandi,
+    stats.toplam,
+  ];
 
-  records.forEach((record, index) => {
-    // Sayfa kontrolü
+  labels.forEach((label, i) => {
+    const x = 10 + i * (boxWidth + boxGap);
+    doc.setFillColor(colors[i]);
+    doc.roundedRect(x, statsY, boxWidth, boxHeight, 3, 3, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(11);
+    doc.text(label, x + 5, statsY + 7);
+    doc.setFontSize(14);
+    doc.text(String(values[i]), x + 5, statsY + 15);
+  });
+
+  // Kayıt listesi
+  let yPos = statsY + boxHeight + 12;
+  const marginBottom = 15;
+  const pageHeight = 210;
+
+  for (let i = 0; i < records.length; i++) {
+    const record = records[i];
+
+    // Sayfa dolarsa yeni sayfa
     if (yPos > pageHeight - marginBottom) {
       doc.addPage();
       yPos = 20;
     }
 
-    // Kayıt başlığı
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`Kayit #${record.id}`, 15, yPos);
-    
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    yPos += 7;
+    // Kutunun dış çerçevesi
+    doc.setDrawColor(180, 180, 180);
+    doc.setLineWidth(0.4);
+    doc.roundedRect(10, yPos, 270, 60, 2, 2);
 
-    // Sol taraf - Bilgiler
+    // Başlık
+    doc.setFontSize(13);
+    doc.setTextColor(0, 0, 0);
+    doc.text(`Kayıt #${record.id}`, 15, yPos + 8);
+
+    // Sol sütun bilgileri
+    let textY = yPos + 16;
     const leftX = 15;
-    const rightX = 190;
-    
-    doc.text(`Lokasyon: ${record.lokasyon}`, leftX, yPos);
-    yPos += 6;
-    doc.text(`Atanan: ${record.atanan}`, leftX, yPos);
-    yPos += 6;
-    doc.text(`Durum: ${record.durum}`, leftX, yPos);
-    yPos += 6;
-    doc.text(`Tarih: ${record.tarih}`, leftX, yPos);
-    yPos += 6;
-    
-    if (record.qrKod) {
-      doc.text(`QR Kod: ${record.qrKod}`, leftX, yPos);
-      yPos += 6;
-    }
+    const info = [
+      `Lokasyon: ${sanitizeText(record.lokasyon)}`,
+      `Atanan: ${sanitizeText(record.atanan)}`,
+      `Durum: ${sanitizeText(record.durum)}`,
+      `Tarih: ${sanitizeText(record.tarih)}`,
+      record.qrKod ? `QR Kod: ${sanitizeText(record.qrKod)}` : '',
+    ].filter(Boolean);
 
-    const startY = yPos;
-    
+    doc.setFontSize(10);
+    info.forEach((line) => {
+      doc.text(line, leftX, textY);
+      textY += 6;
+    });
+
+    // Açıklama
     if (record.aciklama) {
-      doc.text(`Aciklama:`, leftX, yPos);
-      yPos += 6;
-      const aciklamaLines = doc.splitTextToSize(record.aciklama, 160);
-      doc.text(aciklamaLines, leftX + 5, yPos);
-      yPos += aciklamaLines.length * 5;
+      doc.setFontSize(10);
+      doc.text('Açıklama:', leftX, textY);
+      const wrapped = doc.splitTextToSize(
+        sanitizeText(record.aciklama),
+        110
+      );
+      doc.text(wrapped, leftX + 10, textY + 5);
+      textY += wrapped.length * 5 + 5;
     }
 
+    // Yorum
     if (record.yorum) {
-      doc.text(`Yorum:`, leftX, yPos);
-      yPos += 6;
-      const yorumLines = doc.splitTextToSize(record.yorum, 160);
-      doc.text(yorumLines, leftX + 5, yPos);
-      yPos += yorumLines.length * 5;
+      doc.setFontSize(10);
+      doc.text('Yorum:', leftX, textY);
+      const wrapped = doc.splitTextToSize(
+        sanitizeText(record.yorum),
+        110
+      );
+      doc.text(wrapped, leftX + 10, textY + 5);
     }
 
-    // Sağ taraf - Fotoğraf
+    // Sağ tarafa fotoğraf
     if (record.photo) {
       try {
-        const imgY = startY - 20;
-        doc.addImage(record.photo, 'JPEG', rightX, imgY, 70, 50);
-      } catch (error) {
-        console.error('Fotograf yuklenemedi:', error);
+        doc.addImage(record.photo, 'JPEG', 150, yPos + 10, 60, 45);
+      } catch (err) {
+        console.error('Fotoğraf yüklenemedi:', err);
       }
     }
 
-    // Ayırıcı çizgi
-    yPos += 5;
-    doc.setDrawColor(200, 200, 200);
-    doc.line(15, yPos, 282, yPos);
-    yPos += 10;
-  });
+    // QR kod (varsa)
+    if (record.qrKod) {
+      try {
+        const qrDataUrl = await QRCode.toDataURL(record.qrKod);
+        doc.addImage(qrDataUrl, 'PNG', 220, yPos + 10, 40, 40);
+      } catch (err) {
+        console.error('QR kod üretilemedi:', err);
+      }
+    }
 
-  // PDF'i blob olarak döndür
+    yPos += 70; // kutular arası boşluk
+  }
+
   return doc.output('dataurlstring');
 };
 
+// PDF indirici
 export const downloadPDF = (pdfData: string, projectName: string) => {
   const link = document.createElement('a');
   link.href = pdfData;
