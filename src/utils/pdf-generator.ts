@@ -1,174 +1,175 @@
 import { jsPDF } from 'jspdf';
-import QRCode from 'qrcode';
 import { Record, Stats } from '../types';
-import logo from '../assets/2Dsign.png'; // ✅ senin logon
-const LOGO_BASE64 = logo;
+import { supabase } from './supabaseClient';
+import logo from '../assets/2Dsign.png';
 
-// Türkçe karakter desteği
-const sanitizeText = (text?: string) => {
-  if (!text) return '';
-  return text
-    .replace(/ğ/g, 'g')
-    .replace(/Ğ/g, 'G')
-    .replace(/ş/g, 's')
-    .replace(/Ş/g, 'S')
-    .replace(/ı/g, 'i')
-    .replace(/İ/g, 'I')
-    .replace(/ö/g, 'o')
-    .replace(/Ö/g, 'O')
-    .replace(/ü/g, 'u')
-    .replace(/Ü/g, 'U')
-    .replace(/ç/g, 'c')
-    .replace(/Ç/g, 'C');
-};
-
-// Ana PDF oluşturucu
+// 📄 PDF oluşturma
 export const generatePDFPreview = async (
   projectName: string,
   records: Record[],
   stats: Stats
 ): Promise<string> => {
   const doc = new jsPDF({
-    orientation: 'landscape',
+    orientation: 'portrait',
     unit: 'mm',
-    format: 'a4',
+    format: 'a4'
   });
 
-  // Logo
-  doc.addImage(LOGO_BASE64, 'PNG', 10, 8, 40, 18);
+  // 🔹 Logo ekle (sol üst)
+  try {
+    const logoImg = await fetch(logo).then((res) => res.blob());
+    const logoData = await blobToBase64(logoImg);
+    doc.addImage(logoData, 'PNG', 15, 10, 25, 25);
+  } catch (e) {
+    console.warn('Logo eklenemedi:', e);
+  }
 
   // Başlık
-  doc.setFontSize(20);
-  doc.text(sanitizeText(`${projectName} - Proje Raporu`), 60, 20);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(18);
+  doc.text(`${projectName} - Proje Raporu`, 45, 25);
 
   // Tarih
-  doc.setFontSize(12);
+  doc.setFontSize(11);
   const today = new Date().toLocaleDateString('tr-TR');
-  doc.text(`Rapor Tarihi: ${today}`, 60, 28);
+  doc.text(`Rapor Tarihi: ${today}`, 45, 32);
 
-  // Çizgi
-  doc.setDrawColor(50, 50, 50);
-  doc.line(10, 32, 285, 32);
-
-  // İstatistik kutuları
-  const statsY = 38;
-  const boxWidth = 50;
+  // Genel istatistik kutuları
+  const boxY = 40;
+  const boxWidth = 40;
   const boxHeight = 18;
-  const boxGap = 10;
-  const colors = ['#3B82F6', '#EF4444', '#6B7280', '#10B981', '#8B5CF6'];
-  const labels = ['Açık', 'Hatalı', 'Kapalı', 'Tamamlandı', 'Toplam'];
-  const values = [
-    stats.acik,
-    stats.hatali,
-    stats.kapali,
-    stats.tamamlandi,
-    stats.toplam,
+  const boxes = [
+    { title: 'Açık', value: stats.acik, color: [66, 133, 244] },
+    { title: 'Hatalı', value: stats.hatali, color: [234, 67, 53] },
+    { title: 'Kapalı', value: stats.kapali, color: [128, 128, 128] },
+    { title: 'Tamamlandı', value: stats.tamamlandi, color: [52, 168, 83] },
   ];
 
-  labels.forEach((label, i) => {
-    const x = 10 + i * (boxWidth + boxGap);
-    doc.setFillColor(colors[i]);
-    doc.roundedRect(x, statsY, boxWidth, boxHeight, 3, 3, 'F');
+  boxes.forEach((b, i) => {
+    const x = 15 + i * (boxWidth + 10);
+    doc.setFillColor(b.color[0], b.color[1], b.color[2]);
+    doc.roundedRect(x, boxY, boxWidth, boxHeight, 3, 3, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(11);
-    doc.text(label, x + 5, statsY + 7);
+    doc.text(b.title, x + 5, boxY + 8);
     doc.setFontSize(14);
-    doc.text(String(values[i]), x + 5, statsY + 15);
+    doc.text(String(b.value), x + 5, boxY + 15);
   });
 
-  // Kayıt listesi
-  let yPos = statsY + boxHeight + 12;
-  const marginBottom = 15;
-  const pageHeight = 210;
+  doc.setTextColor(0, 0, 0);
+  let yPos = 70;
+  const marginBottom = 30;
 
-  for (let i = 0; i < records.length; i++) {
-    const record = records[i];
-
-    // Sayfa dolarsa yeni sayfa
-    if (yPos > pageHeight - marginBottom) {
+  for (const record of records) {
+    if (yPos > 270 - marginBottom) {
       doc.addPage();
       yPos = 20;
     }
 
-    // Kutunun dış çerçevesi
-    doc.setDrawColor(180, 180, 180);
-    doc.setLineWidth(0.4);
-    doc.roundedRect(10, yPos, 270, 60, 2, 2);
-
-    // Başlık
+    // 🔸 Kayıt başlığı
+    doc.setFont('helvetica', 'bold');
     doc.setFontSize(13);
-    doc.setTextColor(0, 0, 0);
-    doc.text(`Kayıt #${record.id}`, 15, yPos + 8);
+    doc.text(`Kayıt #${record.id} - ${record.lokasyon}`, 15, yPos);
+    yPos += 6;
 
-    // Sol sütun bilgileri
-    let textY = yPos + 16;
-    const leftX = 15;
-    const info = [
-      `Lokasyon: ${sanitizeText(record.lokasyon)}`,
-      `Atanan: ${sanitizeText(record.atanan)}`,
-      `Durum: ${sanitizeText(record.durum)}`,
-      `Tarih: ${sanitizeText(record.tarih)}`,
-      record.qrKod ? `QR Kod: ${sanitizeText(record.qrKod)}` : '',
-    ].filter(Boolean);
-
+    // 🔸 Bilgiler
+    doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
-    info.forEach((line) => {
-      doc.text(line, leftX, textY);
-      textY += 6;
-    });
+    doc.text(`Atanan: ${record.atanan}`, 15, yPos);
+    yPos += 5;
+    doc.text(`Durum: ${record.durum}`, 15, yPos);
+    yPos += 5;
+    doc.text(`Tarih: ${record.tarih}`, 15, yPos);
+    yPos += 6;
 
-    // Açıklama
-    if (record.aciklama) {
-      doc.setFontSize(10);
-      doc.text('Açıklama:', leftX, textY);
-      const wrapped = doc.splitTextToSize(
-        sanitizeText(record.aciklama),
-        110
-      );
-      doc.text(wrapped, leftX + 10, textY + 5);
-      textY += wrapped.length * 5 + 5;
-    }
-
-    // Yorum
-    if (record.yorum) {
-      doc.setFontSize(10);
-      doc.text('Yorum:', leftX, textY);
-      const wrapped = doc.splitTextToSize(
-        sanitizeText(record.yorum),
-        110
-      );
-      doc.text(wrapped, leftX + 10, textY + 5);
-    }
-
-    // Sağ tarafa fotoğraf
-    if (record.photo) {
-      try {
-        doc.addImage(record.photo, 'JPEG', 150, yPos + 10, 60, 45);
-      } catch (err) {
-        console.error('Fotoğraf yüklenemedi:', err);
-      }
-    }
-
-    // QR kod (varsa)
     if (record.qrKod) {
       try {
-        const qrDataUrl = await QRCode.toDataURL(record.qrKod);
-        doc.addImage(qrDataUrl, 'PNG', 220, yPos + 10, 40, 40);
-      } catch (err) {
-        console.error('QR kod üretilemedi:', err);
+        const qrCanvas = document.createElement('canvas');
+        const QR = await import('qrcode');
+        await QR.toCanvas(qrCanvas, record.qrKod);
+        const qrData = qrCanvas.toDataURL('image/png');
+        doc.addImage(qrData, 'PNG', 165, yPos - 25, 25, 25);
+      } catch (e) {
+        console.warn('QR oluşturulamadı:', e);
       }
     }
 
-    yPos += 70; // kutular arası boşluk
+    if (record.aciklama) {
+      const aciklamaLines = doc.splitTextToSize(`Açıklama: ${record.aciklama}`, 170);
+      doc.text(aciklamaLines, 15, yPos);
+      yPos += aciklamaLines.length * 5 + 4;
+    }
+
+    if (record.yorum) {
+      const yorumLines = doc.splitTextToSize(`Yorum: ${record.yorum}`, 170);
+      doc.text(yorumLines, 15, yPos);
+      yPos += yorumLines.length * 5 + 4;
+    }
+
+    if (record.photo) {
+      try {
+        doc.addImage(record.photo, 'JPEG', 15, yPos, 60, 40);
+        yPos += 45;
+      } catch (e) {
+        console.warn('Fotoğraf eklenemedi:', e);
+      }
+    }
+
+    // 🔹 Ayırıcı çizgi
+    doc.setDrawColor(180, 180, 180);
+    doc.line(15, yPos, 195, yPos);
+    yPos += 10;
   }
 
   return doc.output('dataurlstring');
 };
 
-// PDF indirici
-export const downloadPDF = (pdfData: string, projectName: string) => {
-  const link = document.createElement('a');
-  link.href = pdfData;
-  link.download = `${projectName}_Rapor_${new Date().toLocaleDateString('tr-TR')}.pdf`;
-  link.click();
+// 🔹 Blob → Base64
+async function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+// 🧾 PDF Supabase’e yükle
+export const savePDFToSupabase = async (
+  projectName: string,
+  recordId: number,
+  pdfDataUrl: string
+) => {
+  try {
+    const pdfBlob = await fetch(pdfDataUrl).then((res) => res.blob());
+    const fileName = `${projectName}_${recordId}_${Date.now()}.pdf`;
+
+    const { data, error } = await supabase.storage
+      .from('2Dsign360')
+      .upload(`pdfs/${fileName}`, pdfBlob, {
+        contentType: 'application/pdf',
+        upsert: false,
+      });
+
+    if (error) throw error;
+
+    const { data: publicUrlData } = supabase.storage
+      .from('2Dsign360')
+      .getPublicUrl(`pdfs/${fileName}`);
+
+    const pdfUrl = publicUrlData.publicUrl;
+
+    const { error: updateError } = await supabase
+      .from('records')
+      .update({ pdf_url: pdfUrl })
+      .eq('id', recordId);
+
+    if (updateError) throw updateError;
+
+    console.log('✅ PDF Supabase’e yüklendi:', pdfUrl);
+    return pdfUrl;
+  } catch (err) {
+    console.error('❌ PDF yükleme hatası:', err);
+    throw err;
+  }
 };
