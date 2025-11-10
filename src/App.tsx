@@ -13,7 +13,8 @@ import { Record, Stats } from './types';
 import { FileText, FileDown, Search, Filter } from 'lucide-react';
 import { Label } from './components/ui/label';
 import { subscribeToRecords } from './utils/realtimeListener';
-import { PhotoModal } from './components/PhotoModal'; // ✅ Fotoğraf Modal eklendi
+import { PhotoModal } from './components/PhotoModal';
+import logo from './assets/2Dsign.png'; // ✅ Header logosu
 
 const PROJECTS = ['Emek Projesi', 'Bilkent Projesi', 'Çankaya Projesi'];
 
@@ -25,11 +26,12 @@ export default function App() {
   const [pdfPreviewData, setPdfPreviewData] = useState<string>('');
   const [showPdfPreview, setShowPdfPreview] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState<boolean>(false);
 
   // ✏️ düzenleme için
   const [editData, setEditData] = useState<Record | null>(null);
 
-  // 📸 Fotoğraf modal için ✅
+  // 📸 Fotoğraf modal
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
 
@@ -46,7 +48,7 @@ export default function App() {
       if (error) throw error;
       setRecords(data || []);
     } catch (err) {
-      console.error('❌ Kayıtlar alınamadı:', err);
+      console.error('Kayıtlar alınamadı:', err);
     } finally {
       setLoading(false);
     }
@@ -59,7 +61,7 @@ export default function App() {
   // 🔁 realtime dinleyici
   useEffect(() => {
     const unsubscribe = subscribeToRecords(() => {
-      console.log('🔁 Değişiklik algılandı, tablo yenileniyor...');
+      console.log('Değişiklik algılandı, tablo yenileniyor...');
       fetchRecords();
     });
     return () => unsubscribe();
@@ -69,22 +71,22 @@ export default function App() {
     await fetchRecords();
   };
 
-  // 🗑️ Kayıt silme
+  // 🗑️ silme
   const handleDeleteRecord = async (id: number) => {
     if (confirm('Bu kaydı silmek istediğinizden emin misiniz?')) {
       try {
         const { error } = await supabase.from('records').delete().eq('id', id);
         if (error) throw error;
         setRecords((prev) => prev.filter((r) => r.id !== id));
-        alert('✅ Kayıt silindi.');
+        alert('Kayıt silindi.');
       } catch (err) {
-        console.error('❌ Silme hatası:', err);
-        alert('❌ Kayıt silinirken hata oluştu.');
+        console.error('Silme hatası:', err);
+        alert('Kayıt silinirken hata oluştu.');
       }
     }
   };
 
-  // 🖋️ düzenleme
+  // ✏️ düzenleme
   const handleEditRecord = (record: Record) => {
     setEditData(record);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -115,21 +117,12 @@ export default function App() {
       tamamlandi: 0,
       toplam: filteredRecords.length,
     };
-
     filteredRecords.forEach((record) => {
       switch (record.durum) {
-        case 'Açık':
-          stats.acik++;
-          break;
-        case 'Hatalı':
-          stats.hatali++;
-          break;
-        case 'Kapalı':
-          stats.kapali++;
-          break;
-        case 'Tamamlandı':
-          stats.tamamlandi++;
-          break;
+        case 'Açık': stats.acik++; break;
+        case 'Hatalı': stats.hatali++; break;
+        case 'Kapalı': stats.kapali++; break;
+        case 'Tamamlandı': stats.tamamlandi++; break;
       }
     });
     return stats;
@@ -139,10 +132,18 @@ export default function App() {
   const progress = stats.toplam > 0 ? (stats.tamamlandi / stats.toplam) * 100 : 0;
 
   // 📄 PDF & CSV
-  const handlePDFPreview = () => {
-    const pdfData = generatePDFPreview(selectedProject, filteredRecords, stats);
-    setPdfPreviewData(pdfData);
-    setShowPdfPreview(true);
+  const handlePDFPreview = async () => {
+    setIsGeneratingPDF(true);
+    try {
+      const pdfData = await generatePDFPreview(selectedProject, filteredRecords, stats);
+      setPdfPreviewData(pdfData);
+      setShowPdfPreview(true);
+    } catch (err) {
+      console.error('PDF oluşturulamadı:', err);
+      alert('PDF oluşturulurken hata oluştu.');
+    } finally {
+      setIsGeneratingPDF(false);
+    }
   };
 
   const handlePDFDownload = () => {
@@ -166,7 +167,6 @@ export default function App() {
         ].join(',')
       ),
     ].join('\n');
-
     const blob = new Blob(['\ufeff' + csvData], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
@@ -177,24 +177,25 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       {/* Header */}
-      <header className="bg-white shadow-sm rounded-lg p-6 mb-6">
-        <h1 className="text-3xl mb-4">Proje Yönetim Sistemi</h1>
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1">
-            <Label>Proje Seç</Label>
-            <Select value={selectedProject} onValueChange={setSelectedProject}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PROJECTS.map((project) => (
-                  <SelectItem key={project} value={project}>
-                    {project}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+      <header className="bg-white shadow-sm rounded-lg p-6 mb-6 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <img src={logo} alt="2Dsign360" className="h-10" />
+          <h1 className="text-3xl font-semibold">Proje Yönetim Sistemi</h1>
+        </div>
+        <div className="w-64">
+          <Label>Proje Seç</Label>
+          <Select value={selectedProject} onValueChange={setSelectedProject}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PROJECTS.map((project) => (
+                <SelectItem key={project} value={project}>
+                  {project}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </header>
 
@@ -208,9 +209,7 @@ export default function App() {
           <div>
             <Label>Durum</Label>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="Tümü">Tümü</SelectItem>
                 <SelectItem value="Açık">Açık</SelectItem>
@@ -253,11 +252,19 @@ export default function App() {
 
       {/* Export Butonları */}
       <div className="flex flex-wrap gap-4 mb-6">
-        <Button onClick={handlePDFPreview} className="flex items-center gap-2">
+        <Button
+          onClick={handlePDFPreview}
+          className="flex items-center gap-2"
+          disabled={isGeneratingPDF}
+        >
           <FileText className="h-4 w-4" />
-          PDF Rapor Önizle
+          {isGeneratingPDF ? 'Oluşturuluyor...' : 'PDF Rapor Önizle'}
         </Button>
-        <Button onClick={handleCSVExport} variant="outline" className="flex items-center gap-2">
+        <Button
+          onClick={handleCSVExport}
+          variant="outline"
+          className="flex items-center gap-2"
+        >
           <FileDown className="h-4 w-4" />
           CSV Çıkar
         </Button>
@@ -279,7 +286,7 @@ export default function App() {
           onPhotoClick={(url) => {
             setSelectedPhoto(url);
             setShowPhotoModal(true);
-          }} // ✅ Fotoğraf büyütme eklendi
+          }}
         />
       )}
 
