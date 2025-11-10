@@ -1,3 +1,4 @@
+// src/App.tsx
 import React, { useState, useEffect } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './components/ui/select';
 import { Input } from './components/ui/input';
@@ -14,7 +15,7 @@ import { FileText, FileDown, Search, Filter } from 'lucide-react';
 import { Label } from './components/ui/label';
 import { subscribeToRecords } from './utils/realtimeListener';
 import { PhotoModal } from './components/PhotoModal';
-import logo from './assets/2Dsign.png'; // ✅ Header logosu
+import logo from './assets/2Dsign.png';
 
 const PROJECTS = ['Emek Projesi', 'Bilkent Projesi', 'Çankaya Projesi'];
 
@@ -28,14 +29,14 @@ export default function App() {
   const [loading, setLoading] = useState<boolean>(true);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState<boolean>(false);
 
-  // ✏️ düzenleme için
+  // Düzenleme için
   const [editData, setEditData] = useState<Record | null>(null);
 
-  // 📸 Fotoğraf modal
+  // Fotoğraf modal
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
 
-  // 📥 Supabase'ten kayıtları çek
+  // Supabase'ten kayıtları çek
   const fetchRecords = async () => {
     setLoading(true);
     try {
@@ -54,24 +55,25 @@ export default function App() {
     }
   };
 
+  // Proje değişince çek
   useEffect(() => {
     fetchRecords();
   }, [selectedProject]);
 
-  // 🔁 realtime dinleyici
+  // Realtime dinleyici
   useEffect(() => {
     const unsubscribe = subscribeToRecords(() => {
-      console.log('Değişiklik algılandı, tablo yenileniyor...');
       fetchRecords();
     });
     return () => unsubscribe();
   }, [selectedProject]);
 
+  // Yeni kayıt sonrası tazele
   const handleAddRecord = async () => {
     await fetchRecords();
   };
 
-  // 🗑️ silme
+  // Silme
   const handleDeleteRecord = async (id: number) => {
     if (confirm('Bu kaydı silmek istediğinizden emin misiniz?')) {
       try {
@@ -86,7 +88,7 @@ export default function App() {
     }
   };
 
-  // ✏️ düzenleme
+  // Düzenleme
   const handleEditRecord = (record: Record) => {
     setEditData(record);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -97,7 +99,7 @@ export default function App() {
     await fetchRecords();
   };
 
-  // 🔍 filtreleme
+  // Filtreleme
   const filteredRecords = records.filter((record) => {
     const statusMatch = filterStatus === 'Tümü' || record.durum === filterStatus;
     const textMatch =
@@ -108,21 +110,29 @@ export default function App() {
     return statusMatch && textMatch;
   });
 
-  // 📊 istatistikler
+  // İstatistikler
   const calculateStats = (): Stats => {
-    const stats = {
+    const stats: Stats = {
       acik: 0,
       hatali: 0,
       kapali: 0,
       tamamlandi: 0,
-      toplam: filteredRecords.length,
+      toplam: filteredRecords.length
     };
     filteredRecords.forEach((record) => {
       switch (record.durum) {
-        case 'Açık': stats.acik++; break;
-        case 'Hatalı': stats.hatali++; break;
-        case 'Kapalı': stats.kapali++; break;
-        case 'Tamamlandı': stats.tamamlandi++; break;
+        case 'Açık':
+          stats.acik++;
+          break;
+        case 'Hatalı':
+          stats.hatali++;
+          break;
+        case 'Kapalı':
+          stats.kapali++;
+          break;
+        case 'Tamamlandı':
+          stats.tamamlandi++;
+          break;
       }
     });
     return stats;
@@ -131,7 +141,7 @@ export default function App() {
   const stats = calculateStats();
   const progress = stats.toplam > 0 ? (stats.tamamlandi / stats.toplam) * 100 : 0;
 
-  // 📄 PDF & CSV
+  // PDF & CSV
   const handlePDFPreview = async () => {
     setIsGeneratingPDF(true);
     try {
@@ -147,7 +157,9 @@ export default function App() {
   };
 
   const handlePDFDownload = () => {
-    if (pdfPreviewData) downloadPDF(pdfPreviewData, selectedProject);
+    if (pdfPreviewData) {
+      downloadPDF(pdfPreviewData, selectedProject);
+    }
   };
 
   const handleCSVExport = () => {
@@ -163,10 +175,11 @@ export default function App() {
           `"${record.aciklama}"`,
           `"${record.yorum}"`,
           record.qrKod,
-          record.tarih,
+          record.tarih
         ].join(',')
-      ),
+      )
     ].join('\n');
+
     const blob = new Blob(['\ufeff' + csvData], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
@@ -209,7 +222,9 @@ export default function App() {
           <div>
             <Label>Durum</Label>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="Tümü">Tümü</SelectItem>
                 <SelectItem value="Açık">Açık</SelectItem>
@@ -298,7 +313,7 @@ export default function App() {
         onDownload={handlePDFDownload}
       />
 
-      {/* 📸 Fotoğraf Modal */}
+      {/* Fotoğraf Modal */}
       <PhotoModal
         isOpen={showPhotoModal}
         onClose={() => setShowPhotoModal(false)}
