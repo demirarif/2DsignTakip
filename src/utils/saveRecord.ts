@@ -1,62 +1,65 @@
-import { supabase } from './supabaseClient';
+import { supabase } from './supabaseClient'
 
+// Yeni kayıt ekleme (fotoğraf ve pdf ile)
 export async function saveRecord(
-  lokasyon: string,
-  atanan: string,
-  durum: string,
-  photoFile?: File,
+  projectName: string,
+  description: string,
+  imageFile?: File,
   pdfFile?: File
 ) {
   try {
-    let photoUrl: string | null = null;
-    let pdfUrl: string | null = null;
+    let photoUrl: string | null = null
+    let pdfUrl: string | null = null
 
-    // 📸 Fotoğraf yükleme
-    if (photoFile) {
-      const fileName = `photos/${Date.now()}_${photoFile.name}`;
+    // Fotoğraf yükleme
+    if (imageFile) {
       const { data, error } = await supabase.storage
-        .from('2Dsign360') // ✅ mevcut bucket adı
-        .upload(fileName, photoFile, { cacheControl: '3600', upsert: false });
+        .from('2Dsign360')
+        .upload(`photos/${Date.now()}_${imageFile.name}`, imageFile)
 
-      if (error) throw error;
+      if (error) throw error
 
+      // Public URL oluştur
       const { data: publicUrl } = supabase.storage
         .from('2Dsign360')
-        .getPublicUrl(fileName);
+        .getPublicUrl(`photos/${Date.now()}_${imageFile.name}`)
 
-      photoUrl = publicUrl?.publicUrl || null;
+      photoUrl = publicUrl.publicUrl
     }
 
-    // 📄 PDF yükleme (isteğe bağlı)
+    // PDF yükleme
     if (pdfFile) {
-      const fileName = `pdfs/${Date.now()}_${pdfFile.name}`;
       const { data, error } = await supabase.storage
-        .from('2Dsign360') // ✅ aynı bucket
-        .upload(fileName, pdfFile, { cacheControl: '3600', upsert: false });
+        .from('2Dsign360')
+        .upload(`pdfs/${Date.now()}_${pdfFile.name}`, pdfFile)
 
-      if (error) throw error;
+      if (error) throw error
 
       const { data: publicUrl } = supabase.storage
         .from('2Dsign360')
-        .getPublicUrl(fileName);
+        .getPublicUrl(`pdfs/${Date.now()}_${pdfFile.name}`)
 
-      pdfUrl = publicUrl?.publicUrl || null;
+      pdfUrl = publicUrl.publicUrl
     }
 
-    // 💾 Veritabanına kayıt ekleme
-    const { error: insertError } = await supabase.from('records').insert({
-      lokasyon,
-      atanan,
-      durum,
-      photo: photoUrl,
-      pdf: pdfUrl,
-      created_at: new Date().toISOString(),
-    });
+    // Veritabanına ekleme
+    const { error: insertError } = await supabase
+      .from('records')
+      .insert([
+        {
+          project_name: projectName,
+          description,
+          photo: photoUrl,
+          pdf: pdfUrl,
+        },
+      ])
+      .select()
+      .single()
 
-    if (insertError) throw insertError;
+    if (insertError) throw insertError
 
-    console.log('✅ Kayıt başarıyla eklendi!');
+    console.log('✅ Yeni kayıt başarıyla eklendi.')
   } catch (err) {
-    console.error('❌ Kayıt ekleme hatası:', err);
+    console.error('❌ Kayıt ekleme hatası:', err)
   }
 }
