@@ -10,9 +10,10 @@ import { PDFPreviewModal } from './components/PDFPreviewModal';
 import { generatePDFPreview, downloadPDF } from './utils/pdf-generator';
 import { supabase } from './utils/supabaseClient';
 import { Record, Stats } from './types';
-import { FileText, FileDown, Search, Filter, Edit2 } from 'lucide-react';
+import { FileText, FileDown, Search, Filter } from 'lucide-react';
 import { Label } from './components/ui/label';
 import { subscribeToRecords } from './utils/realtimeListener';
+import { PhotoModal } from './components/PhotoModal'; // ✅ Fotoğraf Modal eklendi
 
 const PROJECTS = ['Emek Projesi', 'Bilkent Projesi', 'Çankaya Projesi'];
 
@@ -25,8 +26,12 @@ export default function App() {
   const [showPdfPreview, setShowPdfPreview] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // ✏️ yeni state
+  // ✏️ düzenleme için
   const [editData, setEditData] = useState<Record | null>(null);
+
+  // 📸 Fotoğraf modal için ✅
+  const [showPhotoModal, setShowPhotoModal] = useState(false);
+  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
 
   // 📥 Supabase'ten kayıtları çek
   const fetchRecords = async () => {
@@ -82,7 +87,7 @@ export default function App() {
   // 🖋️ düzenleme
   const handleEditRecord = (record: Record) => {
     setEditData(record);
-    window.scrollTo({ top: 0, behavior: 'smooth' }); // formu yukarı getir
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleEditDone = async () => {
@@ -139,9 +144,11 @@ export default function App() {
     setPdfPreviewData(pdfData);
     setShowPdfPreview(true);
   };
+
   const handlePDFDownload = () => {
     if (pdfPreviewData) downloadPDF(pdfPreviewData, selectedProject);
   };
+
   const handleCSVExport = () => {
     const headers = ['ID', 'Lokasyon', 'Atanan', 'Durum', 'Açıklama', 'Yorum', 'QR Kod', 'Tarih'];
     const csvData = [
@@ -268,7 +275,11 @@ export default function App() {
         <RecordsTable
           records={filteredRecords}
           onDelete={handleDeleteRecord}
-          onEdit={handleEditRecord} // ✅ yeni
+          onEdit={handleEditRecord}
+          onPhotoClick={(url) => {
+            setSelectedPhoto(url);
+            setShowPhotoModal(true);
+          }} // ✅ Fotoğraf büyütme eklendi
         />
       )}
 
@@ -278,6 +289,13 @@ export default function App() {
         onClose={() => setShowPdfPreview(false)}
         pdfData={pdfPreviewData}
         onDownload={handlePDFDownload}
+      />
+
+      {/* 📸 Fotoğraf Modal */}
+      <PhotoModal
+        isOpen={showPhotoModal}
+        onClose={() => setShowPhotoModal(false)}
+        photoUrl={selectedPhoto || undefined}
       />
     </div>
   );
