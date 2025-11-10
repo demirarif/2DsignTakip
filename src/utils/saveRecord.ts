@@ -15,13 +15,15 @@ export async function saveRecord(
     if (photoFile) {
       const fileName = `photos/${Date.now()}_${photoFile.name}`;
       const { data, error } = await supabase.storage
-        .from('uploads')
+        .from('2Dsign360') // ✅ mevcut bucket adı
         .upload(fileName, photoFile, { cacheControl: '3600', upsert: false });
 
       if (error) throw error;
 
-      // Public URL üret
-      const { data: publicUrl } = supabase.storage.from('uploads').getPublicUrl(fileName);
+      const { data: publicUrl } = supabase.storage
+        .from('2Dsign360')
+        .getPublicUrl(fileName);
+
       photoUrl = publicUrl?.publicUrl || null;
     }
 
@@ -29,12 +31,15 @@ export async function saveRecord(
     if (pdfFile) {
       const fileName = `pdfs/${Date.now()}_${pdfFile.name}`;
       const { data, error } = await supabase.storage
-        .from('uploads')
+        .from('2Dsign360') // ✅ aynı bucket
         .upload(fileName, pdfFile, { cacheControl: '3600', upsert: false });
 
       if (error) throw error;
 
-      const { data: publicUrl } = supabase.storage.from('uploads').getPublicUrl(fileName);
+      const { data: publicUrl } = supabase.storage
+        .from('2Dsign360')
+        .getPublicUrl(fileName);
+
       pdfUrl = publicUrl?.publicUrl || null;
     }
 
