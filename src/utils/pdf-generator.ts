@@ -3,7 +3,7 @@ import { Record, Stats } from '../types';
 import { supabase } from './supabaseClient';
 import logo from '../assets/2Dsign.png';
 
-// 📄 PDF oluşturma (logo, kutular, görseller, QR dahil)
+// 📄 PDF oluşturma (logo, kutular, görseller, QR metin olarak)
 export const generatePDFPreview = async (
   projectName: string,
   records: Record[],
@@ -27,7 +27,7 @@ export const generatePDFPreview = async (
   // 🔸 Başlık ve Tarih
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(18);
-  doc.text(encodeURIComponent(`${projectName} - Proje Raporu`), 45, 25, { decodeURI: true });
+  doc.text(decodeURIComponent(`${projectName} - Proje Raporu`), 45, 25);
 
   doc.setFontSize(11);
   const today = new Date().toLocaleDateString('tr-TR');
@@ -83,17 +83,10 @@ export const generatePDFPreview = async (
     doc.text(`Tarih: ${record.tarih}`, 15, yPos);
     yPos += 6;
 
-    // QR Kod
+    // 🔸 QR Kod (sade metin)
     if (record.qrKod) {
-      try {
-        const QR = await import('qrcode');
-        const qrCanvas = document.createElement('canvas');
-        await QR.toCanvas(qrCanvas, record.qrKod);
-        const qrData = qrCanvas.toDataURL('image/png');
-        doc.addImage(qrData, 'PNG', 165, yPos - 25, 25, 25);
-      } catch (e) {
-        console.warn('QR oluşturulamadı:', e);
-      }
+      doc.setFontSize(9);
+      doc.text(`QR Kod: ${record.qrKod}`, 160, yPos - 2);
     }
 
     // Açıklama
@@ -149,7 +142,6 @@ export const savePDFToSupabase = async (
     const pdfBlob = await fetch(pdfDataUrl).then((res) => res.blob());
     const fileName = `${projectName}_${recordId}_${Date.now()}.pdf`;
 
-    // Upload
     const { data, error } = await supabase.storage
       .from('2Dsign360')
       .upload(`pdfs/${fileName}`, pdfBlob, {
@@ -159,14 +151,12 @@ export const savePDFToSupabase = async (
 
     if (error) throw error;
 
-    // Public URL al
     const { data: publicUrlData } = supabase.storage
       .from('2Dsign360')
       .getPublicUrl(`pdfs/${fileName}`);
 
     const pdfUrl = publicUrlData?.publicUrl;
 
-    // Veritabanında ilgili kayda pdf_url yaz
     const { error: updateError } = await supabase
       .from('records')
       .update({ pdf_url: pdfUrl })
