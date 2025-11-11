@@ -1,9 +1,10 @@
+// src/utils/pdf-generator.ts
 import { jsPDF } from 'jspdf';
 import { Record, Stats } from '../types';
 import { supabase } from './supabaseClient';
 import logo from '../assets/2Dsign.png';
 
-// 📄 PDF oluşturma (logo, kutular, görseller, QR metin olarak)
+// 📄 PDF oluşturma (garantili QR metinli, Vercel uyumlu)
 export const generatePDFPreview = async (
   projectName: string,
   records: Record[],
@@ -15,25 +16,27 @@ export const generatePDFPreview = async (
     format: 'a4',
   });
 
-  // 🔹 Logo ekle (sol üst)
+  // 🔹 Logo (sol üst)
   try {
-    const logoImg = await fetch(logo).then((res) => res.blob());
-    const logoData = await blobToBase64(logoImg);
-    doc.addImage(logoData, 'PNG', 15, 10, 25, 25);
-  } catch (e) {
-    console.warn('Logo eklenemedi:', e);
+    const response = await fetch(logo);
+    const blob = await response.blob();
+    const base64 = await blobToBase64(blob);
+    doc.addImage(base64, 'PNG', 15, 10, 25, 25);
+  } catch (err) {
+    console.warn('⚠️ Logo yüklenemedi:', err);
   }
 
-  // 🔸 Başlık ve Tarih
+  // Başlık
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(18);
-  doc.text(decodeURIComponent(`${projectName} - Proje Raporu`), 45, 25);
+  doc.text(`${projectName} - Proje Raporu`, 45, 25);
 
+  // Tarih
   doc.setFontSize(11);
   const today = new Date().toLocaleDateString('tr-TR');
   doc.text(`Rapor Tarihi: ${today}`, 45, 32);
 
-  // 🔸 Genel istatistik kutuları
+  // 🔸 İstatistik kutuları
   const boxY = 40;
   const boxWidth = 40;
   const boxHeight = 18;
@@ -57,7 +60,7 @@ export const generatePDFPreview = async (
 
   doc.setTextColor(0, 0, 0);
 
-  // 🔸 İçerik
+  // 🔹 Kayıtlar
   let yPos = 70;
   const marginBottom = 30;
 
@@ -67,7 +70,6 @@ export const generatePDFPreview = async (
       yPos = 20;
     }
 
-    // Başlık
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(13);
     doc.text(`Kayıt #${record.id} - ${record.lokasyon}`, 15, yPos);
@@ -76,14 +78,11 @@ export const generatePDFPreview = async (
     // Bilgiler
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
-    doc.text(`Atanan: ${record.atanan}`, 15, yPos);
-    yPos += 5;
-    doc.text(`Durum: ${record.durum}`, 15, yPos);
-    yPos += 5;
-    doc.text(`Tarih: ${record.tarih}`, 15, yPos);
-    yPos += 6;
+    doc.text(`Atanan: ${record.atanan}`, 15, yPos); yPos += 5;
+    doc.text(`Durum: ${record.durum}`, 15, yPos); yPos += 5;
+    doc.text(`Tarih: ${record.tarih}`, 15, yPos); yPos += 6;
 
-    // 🔸 QR Kod (sade metin)
+    // QR metin olarak yaz
     if (record.qrKod) {
       doc.setFontSize(9);
       doc.text(`QR Kod: ${record.qrKod}`, 160, yPos - 2);
@@ -122,7 +121,7 @@ export const generatePDFPreview = async (
   return doc.output('dataurlstring');
 };
 
-// 🔹 Blob → Base64 dönüştürücü
+// 🔹 Blob → Base64
 async function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -157,12 +156,10 @@ export const savePDFToSupabase = async (
 
     const pdfUrl = publicUrlData?.publicUrl;
 
-    const { error: updateError } = await supabase
+    await supabase
       .from('records')
       .update({ pdf_url: pdfUrl })
       .eq('id', recordId);
-
-    if (updateError) throw updateError;
 
     console.log('✅ PDF Supabase’e yüklendi:', pdfUrl);
     return pdfUrl;
