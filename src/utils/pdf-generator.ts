@@ -3,7 +3,7 @@ import { Record, Stats } from '../types';
 import { supabase } from './supabaseClient';
 import logo from '../assets/2Dsign.png';
 
-// 📄 PDF oluşturma
+// 📄 PDF oluşturma (logo, kutular, görseller, QR dahil)
 export const generatePDFPreview = async (
   projectName: string,
   records: Record[],
@@ -12,7 +12,7 @@ export const generatePDFPreview = async (
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
-    format: 'a4'
+    format: 'a4',
   });
 
   // 🔹 Logo ekle (sol üst)
@@ -24,17 +24,16 @@ export const generatePDFPreview = async (
     console.warn('Logo eklenemedi:', e);
   }
 
-  // Başlık
+  // 🔸 Başlık ve Tarih
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(18);
-  doc.text(`${projectName} - Proje Raporu`, 45, 25);
+  doc.text(encodeURIComponent(`${projectName} - Proje Raporu`), 45, 25, { decodeURI: true });
 
-  // Tarih
   doc.setFontSize(11);
   const today = new Date().toLocaleDateString('tr-TR');
   doc.text(`Rapor Tarihi: ${today}`, 45, 32);
 
-  // Genel istatistik kutuları
+  // 🔸 Genel istatistik kutuları
   const boxY = 40;
   const boxWidth = 40;
   const boxHeight = 18;
@@ -57,6 +56,8 @@ export const generatePDFPreview = async (
   });
 
   doc.setTextColor(0, 0, 0);
+
+  // 🔸 İçerik
   let yPos = 70;
   const marginBottom = 30;
 
@@ -66,13 +67,13 @@ export const generatePDFPreview = async (
       yPos = 20;
     }
 
-    // 🔸 Kayıt başlığı
+    // Başlık
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(13);
     doc.text(`Kayıt #${record.id} - ${record.lokasyon}`, 15, yPos);
     yPos += 6;
 
-    // 🔸 Bilgiler
+    // Bilgiler
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
     doc.text(`Atanan: ${record.atanan}`, 15, yPos);
@@ -82,10 +83,11 @@ export const generatePDFPreview = async (
     doc.text(`Tarih: ${record.tarih}`, 15, yPos);
     yPos += 6;
 
+    // QR Kod
     if (record.qrKod) {
       try {
-        const qrCanvas = document.createElement('canvas');
         const QR = await import('qrcode');
+        const qrCanvas = document.createElement('canvas');
         await QR.toCanvas(qrCanvas, record.qrKod);
         const qrData = qrCanvas.toDataURL('image/png');
         doc.addImage(qrData, 'PNG', 165, yPos - 25, 25, 25);
@@ -94,18 +96,21 @@ export const generatePDFPreview = async (
       }
     }
 
+    // Açıklama
     if (record.aciklama) {
       const aciklamaLines = doc.splitTextToSize(`Açıklama: ${record.aciklama}`, 170);
       doc.text(aciklamaLines, 15, yPos);
       yPos += aciklamaLines.length * 5 + 4;
     }
 
+    // Yorum
     if (record.yorum) {
       const yorumLines = doc.splitTextToSize(`Yorum: ${record.yorum}`, 170);
       doc.text(yorumLines, 15, yPos);
       yPos += yorumLines.length * 5 + 4;
     }
 
+    // Fotoğraf
     if (record.photo) {
       try {
         doc.addImage(record.photo, 'JPEG', 15, yPos, 60, 40);
@@ -115,7 +120,7 @@ export const generatePDFPreview = async (
       }
     }
 
-    // 🔹 Ayırıcı çizgi
+    // Ayırıcı çizgi
     doc.setDrawColor(180, 180, 180);
     doc.line(15, yPos, 195, yPos);
     yPos += 10;
@@ -124,7 +129,7 @@ export const generatePDFPreview = async (
   return doc.output('dataurlstring');
 };
 
-// 🔹 Blob → Base64
+// 🔹 Blob → Base64 dönüştürücü
 async function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -134,7 +139,7 @@ async function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
-// 🧾 PDF Supabase’e yükle
+// 🧾 PDF Supabase’e yükle (otomatik)
 export const savePDFToSupabase = async (
   projectName: string,
   recordId: number,
@@ -144,21 +149,24 @@ export const savePDFToSupabase = async (
     const pdfBlob = await fetch(pdfDataUrl).then((res) => res.blob());
     const fileName = `${projectName}_${recordId}_${Date.now()}.pdf`;
 
+    // Upload
     const { data, error } = await supabase.storage
       .from('2Dsign360')
       .upload(`pdfs/${fileName}`, pdfBlob, {
         contentType: 'application/pdf',
-        upsert: false,
+        upsert: true,
       });
 
     if (error) throw error;
 
+    // Public URL al
     const { data: publicUrlData } = supabase.storage
       .from('2Dsign360')
       .getPublicUrl(`pdfs/${fileName}`);
 
-    const pdfUrl = publicUrlData.publicUrl;
+    const pdfUrl = publicUrlData?.publicUrl;
 
+    // Veritabanında ilgili kayda pdf_url yaz
     const { error: updateError } = await supabase
       .from('records')
       .update({ pdf_url: pdfUrl })
