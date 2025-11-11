@@ -1,6 +1,12 @@
 // src/App.tsx
 import React, { useState, useEffect } from 'react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from './components/ui/select';
 import { Input } from './components/ui/input';
 import { Button } from './components/ui/button';
 import { Progress } from './components/ui/progress';
@@ -15,28 +21,25 @@ import { FileText, FileDown, Search, Filter } from 'lucide-react';
 import { Label } from './components/ui/label';
 import { subscribeToRecords } from './utils/realtimeListener';
 import { PhotoModal } from './components/PhotoModal';
-import logo from './assets/2Dsign.png';
+import logo from './assets/2Dsign.png'; // 🟩 logo importu eklendi
 
 const PROJECTS = ['Emek Projesi', 'Bilkent Projesi', 'Çankaya Projesi'];
 
 export default function App() {
-  const [selectedProject, setSelectedProject] = useState<string>(PROJECTS[0]);
+  const [selectedProject, setSelectedProject] = useState(PROJECTS[0]);
   const [records, setRecords] = useState<Record[]>([]);
-  const [filterStatus, setFilterStatus] = useState<string>('Tümü');
-  const [searchText, setSearchText] = useState<string>('');
-  const [pdfPreviewData, setPdfPreviewData] = useState<string>('');
-  const [showPdfPreview, setShowPdfPreview] = useState<boolean>(false);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [isGeneratingPDF, setIsGeneratingPDF] = useState<boolean>(false);
+  const [filterStatus, setFilterStatus] = useState('Tümü');
+  const [searchText, setSearchText] = useState('');
+  const [pdfPreviewData, setPdfPreviewData] = useState('');
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
-  // Düzenleme için
   const [editData, setEditData] = useState<Record | null>(null);
-
-  // Fotoğraf modal
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
 
-  // Supabase'ten kayıtları çek
+  // 📥 Kayıtları getir
   const fetchRecords = async () => {
     setLoading(true);
     try {
@@ -55,40 +58,30 @@ export default function App() {
     }
   };
 
-  // Proje değişince çek
   useEffect(() => {
     fetchRecords();
   }, [selectedProject]);
 
-  // Realtime dinleyici
+  // 🔁 Realtime dinleyici
   useEffect(() => {
-    const unsubscribe = subscribeToRecords(() => {
-      fetchRecords();
-    });
+    const unsubscribe = subscribeToRecords(() => fetchRecords());
     return () => unsubscribe();
   }, [selectedProject]);
 
-  // Yeni kayıt sonrası tazele
-  const handleAddRecord = async () => {
-    await fetchRecords();
-  };
+  const handleAddRecord = async () => fetchRecords();
 
-  // Silme
   const handleDeleteRecord = async (id: number) => {
-    if (confirm('Bu kaydı silmek istediğinizden emin misiniz?')) {
-      try {
-        const { error } = await supabase.from('records').delete().eq('id', id);
-        if (error) throw error;
-        setRecords((prev) => prev.filter((r) => r.id !== id));
-        alert('Kayıt silindi.');
-      } catch (err) {
-        console.error('Silme hatası:', err);
-        alert('Kayıt silinirken hata oluştu.');
-      }
+    if (!confirm('Bu kaydı silmek istediğinizden emin misiniz?')) return;
+    try {
+      const { error } = await supabase.from('records').delete().eq('id', id);
+      if (error) throw error;
+      setRecords((prev) => prev.filter((r) => r.id !== id));
+      alert('Kayıt silindi.');
+    } catch (err) {
+      console.error('Silme hatası:', err);
     }
   };
 
-  // Düzenleme
   const handleEditRecord = (record: Record) => {
     setEditData(record);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -99,49 +92,29 @@ export default function App() {
     await fetchRecords();
   };
 
-  // Filtreleme
-  const filteredRecords = records.filter((record) => {
-    const statusMatch = filterStatus === 'Tümü' || record.durum === filterStatus;
+  // 🔍 Filtreleme
+  const filteredRecords = records.filter((r) => {
+    const statusMatch = filterStatus === 'Tümü' || r.durum === filterStatus;
     const textMatch =
-      searchText === '' ||
-      record.lokasyon?.toLowerCase().includes(searchText.toLowerCase()) ||
-      record.atanan?.toLowerCase().includes(searchText.toLowerCase()) ||
-      record.aciklama?.toLowerCase().includes(searchText.toLowerCase());
+      !searchText ||
+      r.lokasyon?.toLowerCase().includes(searchText.toLowerCase()) ||
+      r.atanan?.toLowerCase().includes(searchText.toLowerCase()) ||
+      r.aciklama?.toLowerCase().includes(searchText.toLowerCase());
     return statusMatch && textMatch;
   });
 
-  // İstatistikler
-  const calculateStats = (): Stats => {
-    const stats: Stats = {
-      acik: 0,
-      hatali: 0,
-      kapali: 0,
-      tamamlandi: 0,
-      toplam: filteredRecords.length
-    };
-    filteredRecords.forEach((record) => {
-      switch (record.durum) {
-        case 'Açık':
-          stats.acik++;
-          break;
-        case 'Hatalı':
-          stats.hatali++;
-          break;
-        case 'Kapalı':
-          stats.kapali++;
-          break;
-        case 'Tamamlandı':
-          stats.tamamlandi++;
-          break;
-      }
-    });
-    return stats;
-  };
+  // 📊 İstatistikler
+  const stats: Stats = {
+    acik: filteredRecords.filter((r) => r.durum === 'Açık').length,
+    hatali: filteredRecords.filter((r) => r.durum === 'Hatalı').length,
+    kapali: filteredRecords.filter((r) => r.durum === 'Kapalı').length,
+    tamamlandi: filteredRecords.filter((r) => r.durum === 'Tamamlandı').length,
+    toplam: filteredRecords.length
+  }; // 🔻 calculateStats() fonksiyonuna gerek kalmadı → inline yazıldı
 
-  const stats = calculateStats();
-  const progress = stats.toplam > 0 ? (stats.tamamlandi / stats.toplam) * 100 : 0;
+  const progress = stats.toplam ? (stats.tamamlandi / stats.toplam) * 100 : 0;
 
-  // PDF & CSV
+  // 📄 PDF & CSV
   const handlePDFPreview = async () => {
     setIsGeneratingPDF(true);
     try {
@@ -149,34 +122,21 @@ export default function App() {
       setPdfPreviewData(pdfData);
       setShowPdfPreview(true);
     } catch (err) {
-      console.error('PDF oluşturulamadı:', err);
       alert('PDF oluşturulurken hata oluştu.');
+      console.error(err);
     } finally {
       setIsGeneratingPDF(false);
     }
   };
 
-  const handlePDFDownload = () => {
-    if (pdfPreviewData) {
-      downloadPDF(pdfPreviewData, selectedProject);
-    }
-  };
+  const handlePDFDownload = () => pdfPreviewData && downloadPDF(pdfPreviewData, selectedProject);
 
   const handleCSVExport = () => {
     const headers = ['ID', 'Lokasyon', 'Atanan', 'Durum', 'Açıklama', 'Yorum', 'QR Kod', 'Tarih'];
     const csvData = [
       headers.join(','),
-      ...filteredRecords.map((record) =>
-        [
-          record.id,
-          `"${record.lokasyon}"`,
-          `"${record.atanan}"`,
-          record.durum,
-          `"${record.aciklama}"`,
-          `"${record.yorum}"`,
-          record.qrKod,
-          record.tarih
-        ].join(',')
+      ...filteredRecords.map((r) =>
+        [r.id, `"${r.lokasyon}"`, `"${r.atanan}"`, r.durum, `"${r.aciklama}"`, `"${r.yorum}"`, r.qrKod, r.tarih].join(',')
       )
     ].join('\n');
 
@@ -189,7 +149,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
-      {/* Header */}
+      {/* 🟩 Header kısmı logolu hale getirildi */}
       <header className="bg-white shadow-sm rounded-lg p-6 mb-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <img src={logo} alt="2Dsign360" className="h-10" />
@@ -198,14 +158,10 @@ export default function App() {
         <div className="w-64">
           <Label>Proje Seç</Label>
           <Select value={selectedProject} onValueChange={setSelectedProject}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              {PROJECTS.map((project) => (
-                <SelectItem key={project} value={project}>
-                  {project}
-                </SelectItem>
+              {PROJECTS.map((p) => (
+                <SelectItem key={p} value={p}>{p}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -222,22 +178,18 @@ export default function App() {
           <div>
             <Label>Durum</Label>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="Tümü">Tümü</SelectItem>
-                <SelectItem value="Açık">Açık</SelectItem>
-                <SelectItem value="Hatalı">Hatalı</SelectItem>
-                <SelectItem value="Kapalı">Kapalı</SelectItem>
-                <SelectItem value="Tamamlandı">Tamamlandı</SelectItem>
+                {['Tümü', 'Açık', 'Hatalı', 'Kapalı', 'Tamamlandı'].map((opt) => (
+                  <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
           <div>
             <Label>Arama</Label>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
                 placeholder="Lokasyon, atanan veya açıklama ara..."
                 value={searchText}
@@ -249,7 +201,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* İstatistikler */}
+      {/* İstatistik Kartları */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
         <StatsCard title="Açık" value={stats.acik} color="bg-blue-500" />
         <StatsCard title="Hatalı" value={stats.hatali} color="bg-red-500" />
@@ -267,30 +219,20 @@ export default function App() {
 
       {/* Export Butonları */}
       <div className="flex flex-wrap gap-4 mb-6">
-        <Button
-          onClick={handlePDFPreview}
-          className="flex items-center gap-2"
-          disabled={isGeneratingPDF}
-        >
+        <Button onClick={handlePDFPreview} className="flex items-center gap-2" disabled={isGeneratingPDF}>
           <FileText className="h-4 w-4" />
           {isGeneratingPDF ? 'Oluşturuluyor...' : 'PDF Rapor Önizle'}
         </Button>
-        <Button
-          onClick={handleCSVExport}
-          variant="outline"
-          className="flex items-center gap-2"
-        >
+        <Button onClick={handleCSVExport} variant="outline" className="flex items-center gap-2">
           <FileDown className="h-4 w-4" />
           CSV Çıkar
         </Button>
       </div>
 
-      {/* Form */}
       <div className="mb-6">
         <RecordForm onSubmit={handleAddRecord} editData={editData} onEditDone={handleEditDone} />
       </div>
 
-      {/* Tablo */}
       {loading ? (
         <p className="text-center text-gray-500">Veriler yükleniyor...</p>
       ) : (
@@ -305,7 +247,6 @@ export default function App() {
         />
       )}
 
-      {/* PDF Modal */}
       <PDFPreviewModal
         isOpen={showPdfPreview}
         onClose={() => setShowPdfPreview(false)}
@@ -313,7 +254,6 @@ export default function App() {
         onDownload={handlePDFDownload}
       />
 
-      {/* Fotoğraf Modal */}
       <PhotoModal
         isOpen={showPhotoModal}
         onClose={() => setShowPhotoModal(false)}
